@@ -18,7 +18,9 @@
 import asyncio
 import datetime
 import logging
+import os
 import re
+import subprocess
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -233,6 +235,40 @@ async def handle_reset(yacht_id: str) -> None:
     await manager.broadcast_display({"type": "history_cleared", "yacht_id": yacht_id})
 
 
+async def _delayed_self_restart(delay: float = 1.5) -> None:
+    """Даёт время дописать HTTP-ответ клиенту, потом завершает процесс —
+    start.bat уже умеет сам перезапускать сервер после падения, так что он
+    поднимется заново через несколько секунд уже со свежим кодом."""
+    await asyncio.sleep(delay)
+    os._exit(0)
+
+
+def _run_git_update(cwd: str) -> Dict[str, Any]:
+    """git pull + переустановка зависимостей (если что-то реально подтянулось)."""
+    try:
+        pull = subprocess.run(
+            ["git", "pull"], cwd=cwd, capture_output=True, text=True, timeout=60
+        )
+    except Exception as e:
+        return {"ok": False, "output": f"Не удалось запустить git: {e}", "changed": False}
+
+    output = ((pull.stdout or "") + (pull.stderr or "")).strip()
+    if pull.returncode != 0:
+        return {"ok": False, "output": output or "git pull завершился с ошибкой.", "changed": False}
+
+    changed = "Already up to date" not in output and "уже акту" not in output.lower()
+    if changed:
+        python_exe = os.path.join(cwd, ".venv", "Scripts", "python.exe")
+        if os.path.exists(python_exe):
+            pip = subprocess.run(
+                [python_exe, "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", "requirements.txt"],
+                cwd=cwd, capture_output=True, text=True, timeout=180,
+            )
+            output += "\n" + ((pip.stdout or "") + (pip.stderr or "")).strip()
+
+    return {"ok": True, "output": output.strip(), "changed": changed}
+
+
 def _public_config() -> Dict[str, Any]:
     return {
         "stand": cfg.STAND,
@@ -255,6 +291,16 @@ async def admin_page() -> FileResponse:
     """Панель оператора: статус связи, быстрая отправка, ссылка на настройки —
     открывается с телефона/ноутбука в той же Wi-Fi сети, стенд не трогает."""
     return FileResponse(str(WEB_DIR / "admin.html"))
+
+
+@app.post("/api/update")
+async def api_update() -> Dict[str, Any]:
+    """git pull на самом стенде + переустановка зависимостей, если что-то
+    подтянулось, затем контролируемый перезапуск процесса (см. start.bat)."""
+    result = _run_git_update(str(cfg.BASE_DIR))
+    if result["ok"] and result["changed"]:
+        asyncio.create_task(_delayed_self_restart())
+    return {"ok": result["ok"], "output": result["output"], "restarting": result["ok"] and result["changed"]}
 
 
 @app.get("/api/config")
@@ -297,6 +343,10 @@ async def ws_display(ws: WebSocket) -> None:
             elif msg_type == "reset_history":
                 yacht_id = data.get("yacht_id", "")
                 asyncio.create_task(handle_reset(yacht_id))
+            elif msg_type == "trigger_yacht_update":
+                yacht_id = data.get("yacht_id", "")
+                if yacht_id in cfg.YACHTS_BY_ID:
+                    asyncio.create_task(manager.send_to_yacht(yacht_id, {"type": "update"}))
     except WebSocketDisconnect:
         pass
     finally:

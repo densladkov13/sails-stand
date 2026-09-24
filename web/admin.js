@@ -11,6 +11,8 @@
   const busyBanner = document.getElementById("busy-banner");
   const cardsEl = document.getElementById("yacht-cards");
   const toastEl = document.getElementById("toast");
+  const standUpdateBtn = document.getElementById("stand-update-btn");
+  const standUpdateHint = document.getElementById("stand-update-hint");
 
   let ws = null;
   let reconnectDelay = 1000;
@@ -74,6 +76,7 @@
             <button class="btn-send">Отправить</button>
             <button class="btn-clear">Очистить историю</button>
           </div>
+          <button class="btn-update small">Обновить компьютер яхты</button>
         </div>
       `;
       cardsEl.appendChild(card);
@@ -82,6 +85,7 @@
       const input = card.querySelector("input");
       const sendBtn = card.querySelector(".btn-send");
       const clearBtn = card.querySelector(".btn-clear");
+      const updateBtn = card.querySelector(".btn-update");
 
       function doSend() {
         const text = input.value.trim();
@@ -95,6 +99,7 @@
         if (!window.confirm(`Очистить историю «${y.name || y.id}»?`)) return;
         sendWS({ type: "reset_history", yacht_id: y.id });
       });
+      updateBtn.addEventListener("click", () => triggerYachtUpdate(y.id, y.name || y.id));
 
       if (!enabled) {
         input.disabled = true;
@@ -209,6 +214,39 @@
         showToast(data.message || "Произошла ошибка");
         break;
     }
+  }
+
+  // ---------- Обновление кода (git pull) ----------
+  standUpdateBtn.addEventListener("click", async () => {
+    if (!window.confirm("Обновить стенд? Сервер перезапустится (5-8 секунд); если сейчас идёт разговор со зрителем, он прервётся.")) return;
+    standUpdateBtn.disabled = true;
+    const prevHint = standUpdateHint.textContent;
+    standUpdateHint.textContent = "Обновляю...";
+    try {
+      const resp = await fetch("/api/update", { method: "POST" });
+      const data = await resp.json();
+      if (data.ok && data.restarting) {
+        standUpdateHint.textContent = "Обновлено, сервер перезапускается — страница переподключится сама через несколько секунд.";
+        showToast("Стенд обновляется и перезапускается...");
+      } else if (data.ok) {
+        standUpdateHint.textContent = prevHint;
+        showToast("Уже последняя версия — обновлять нечего");
+      } else {
+        standUpdateHint.textContent = prevHint;
+        showToast("Ошибка обновления: " + (data.output || "").slice(0, 200));
+      }
+    } catch (e) {
+      standUpdateHint.textContent = prevHint;
+      showToast("Не удалось обратиться к серверу");
+    } finally {
+      standUpdateBtn.disabled = false;
+    }
+  });
+
+  function triggerYachtUpdate(yachtId, yachtName) {
+    if (!window.confirm(`Обновить компьютер яхты «${yachtName}»? Он ненадолго отключится и перезапустится.`)) return;
+    sendWS({ type: "trigger_yacht_update", yacht_id: yachtId });
+    showToast(`Команда обновления отправлена яхте «${yachtName}»`);
   }
 
   loadYachts();

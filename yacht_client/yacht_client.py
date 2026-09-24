@@ -12,6 +12,10 @@
 не слышит) — она приходит отдельными полями "effect"/"color" в том же
 событии "play_morse".
 
+Также умеет обновляться дистанционно: команда "update" с панели оператора
+(/admin на стенде) запускает git pull + переустановку зависимостей и
+перезапускает процесс — start_yacht_client.bat поднимет его заново.
+
 Сейчас реализовано:
   - звук через winsound.Beep (Windows) с точным таймингом точка/тире;
   - заглушки set_led() и set_led_effect(), которые просто печатают
@@ -24,11 +28,16 @@
 import argparse
 import asyncio
 import json
+import os
+import subprocess
 import sys
 import time
+from pathlib import Path
 
 import requests
 import websockets
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 try:
     import winsound
@@ -61,6 +70,42 @@ def play_tone(duration_s: float, freq_hz: int) -> None:
         print(f"[BEEP] {freq_hz} Hz x {duration_s:.2f}s")
         time.sleep(duration_s)
     set_led(False)
+
+
+def run_update_and_exit() -> None:
+    """Команда с панели оператора: git pull + переустановка зависимостей,
+    затем процесс завершается — start_yacht_client.bat сам поднимет его
+    заново через несколько секунд уже со свежим кодом."""
+    print("[yacht_client] Получена команда обновления: git pull...")
+    try:
+        result = subprocess.run(
+            ["git", "pull"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=60
+        )
+        print(result.stdout)
+        print(result.stderr)
+        if result.returncode != 0:
+            print("[yacht_client] git pull завершился с ошибкой, обновление отменено.")
+            return
+
+        changed = "Already up to date" not in (result.stdout or "") and "уже акту" not in (result.stdout or "").lower()
+        if not changed:
+            print("[yacht_client] Уже последняя версия, перезапуск не требуется.")
+            return
+
+        python_exe = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+        if python_exe.exists():
+            pip = subprocess.run(
+                [str(python_exe), "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", "requirements.txt"],
+                cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=180,
+            )
+            print(pip.stdout)
+            print(pip.stderr)
+    except Exception as e:
+        print(f"[yacht_client] Ошибка обновления: {e}")
+        return
+    print("[yacht_client] Обновление применено, перезапуск...")
+    time.sleep(1)
+    os._exit(0)
 
 
 def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> None:
@@ -105,7 +150,13 @@ async def run(host: str, port: int, yacht_id: str) -> None:
                 backoff = 1.0
                 async for raw in ws:
                     data = json.loads(raw)
-                    if data.get("type") != "play_morse":
+                    msg_type = data.get("type")
+
+                    if msg_type == "update":
+                        await asyncio.to_thread(run_update_and_exit)
+                        continue
+
+                    if msg_type != "play_morse":
                         continue
                     sender = data.get("sender")
                     text = data.get("text", "")
