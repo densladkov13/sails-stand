@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>SAILS — Стенд</title>
+<link rel="icon" href="data:," />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <nav class="yacht-nav" id="yacht-nav"></nav>
+    </aside>
+
+    <main class="stage">
+      <div class="chat-log-container" id="chat-log-container"></div>
+
+      <div class="input-dock">
+        <div class="input-row">
+          <input type="text" id="text-input" placeholder="Сообщение яхте азбукой Морзе…" autocomplete="off" maxlength="180" />
+          <button id="send-btn" class="send-btn" title="Передать" aria-label="Передать">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12h15M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <div class="keyboard" id="keyboard" hidden></div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <div class="modal-overlay" id="settings-overlay" hidden>
+    <div class="modal" id="settings-modal" role="dialog" aria-modal="true" aria-label="Настройки стенда">
+      <div class="modal-header">
+        <h2>Настройки стенда</h2>
+        <button class="modal-close" id="settings-close" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="modal-body" id="settings-body">
+        <section class="settings-section">
+          <h3>Азбука Морзе</h3>
+          <div class="field-row">
+            <label class="field">
+              <span>Скорость, слов/мин</span>
+              <input type="number" id="set-wpm" min="5" max="60" />
+            </label>
+            <label class="field">
+              <span>Тон сигнала, Гц</span>
+              <input type="number" id="set-tone" min="200" max="1200" />
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Нейросеть (OpenRouter)</h3>
+          <label class="field">
+            <span>Модель</span>
+            <input type="text" id="set-model" />
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>Температура</span>
+              <input type="number" id="set-temp" min="0" max="2" step="0.05" />
+            </label>
+            <label class="field">
+              <span>Макс. токенов ответа</span>
+              <input type="number" id="set-max-tokens" min="16" max="600" />
+            </label>
+            <label class="field">
+              <span>Мин. задержка ответа, сек</span>
+              <input type="number" id="set-min-delay" min="0" max="10" step="0.1" />
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>История диалога</h3>
+          <div class="field-row field-row-align">
+            <label class="field">
+              <span>Сколько последних сообщений помнить</span>
+              <input type="number" id="set-history" min="1" max="40" />
+            </label>
+            <button class="text-btn danger" id="set-clear-all" type="button">Очистить историю всех яхт</button>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <h3>Общий промпт (действует на все яхты)</h3>
+          <textarea class="field-textarea" id="set-common-prompt" rows="3"></textarea>
+        </section>
+
+        <section class="settings-section" id="settings-yachts">
+          <h3>Яхты</h3>
+          <!-- Блоки на каждую яхту добавляются скриптом -->
+        </section>
+      </div>
+      <div class="modal-footer">
+        <span class="modal-hint">Сохраняется в config.json и применяется сразу, без перезапуска</span>
+        <div class="modal-actions">
+          <button class="text-btn" id="settings-cancel" type="button">Отмена</button>
+          <button class="send-btn-text" id="settings-save" type="button">Сохранить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
