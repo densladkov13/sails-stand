@@ -80,13 +80,31 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem ---------- Stand address + yacht id: ask once, remember for next time ----------
+rem (so this can auto-start unattended after a reboot without anyone typing
+rem anything - delete yacht_client\yacht.cfg to be asked again)
+set "CFG_FILE=yacht_client\yacht.cfg"
+if exist "%CFG_FILE%" goto load_cfg
+goto ask_cfg
+
+:load_cfg
+for /f "usebackq tokens=1,2 delims=|" %%a in ("%CFG_FILE%") do (
+    set "STAND_HOST=%%a"
+    set "YACHT_ID=%%b"
+)
+echo Using saved settings: %STAND_HOST% / %YACHT_ID%  ^(delete %CFG_FILE% to change^)
+goto cfg_done
+
+:ask_cfg
 echo.
 set /p STAND_HOST=Stand computer address (hostname.local or IP, e.g. SAILS-STAND.local):
 if "%STAND_HOST%"=="" set "STAND_HOST=127.0.0.1"
-
 set /p YACHT_ID=Yacht id from config.json [yacht1]:
 if "%YACHT_ID%"=="" set "YACHT_ID=yacht1"
+echo %STAND_HOST%^|%YACHT_ID%>"%CFG_FILE%"
+echo Saved - next time this starts automatically, without asking.
 
+:cfg_done
 echo.
 echo Connecting to %STAND_HOST%:8000 as "%YACHT_ID%" ^(auto-reconnects; close this window to stop^)...
 echo.
