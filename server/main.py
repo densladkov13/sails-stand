@@ -250,6 +250,13 @@ async def index() -> FileResponse:
     return FileResponse(str(WEB_DIR / "index.html"))
 
 
+@app.get("/admin")
+async def admin_page() -> FileResponse:
+    """Панель оператора: статус связи, быстрая отправка, ссылка на настройки —
+    открывается с телефона/ноутбука в той же Wi-Fi сети, стенд не трогает."""
+    return FileResponse(str(WEB_DIR / "admin.html"))
+
+
 @app.get("/api/config")
 async def api_config() -> Dict[str, Any]:
     return _public_config()

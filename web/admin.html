@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SAILS — Панель оператора</title>
+<link rel="icon" href="data:," />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <header class="admin-header">
+    <div class="admin-title">
+      <span class="admin-dot" id="conn-dot"></span>
+      <h1>SAILS · Панель оператора</h1>
+    </div>
+    <div class="admin-links">
+      <a href="/" target="_blank" rel="noopener">Открыть стенд ↗</a>
+      <a href="/?admin=1" target="_blank" rel="noopener">Настройки ↗</a>
+    </div>
+  </header>
+
+  <div class="busy-banner" id="busy-banner" hidden>Сейчас идёт разговор на стенде — новые сообщения подождут своей очереди.</div>
+
+  <main class="admin-grid" id="yacht-cards"></main>
+
+  <section class="cheatsheet">
+    <h2>Шпаргалка: команда подсветки</h2>
+    <p>Нейросеть сама дописывает в конец ответа <code>{эффект,цвет}</code> — зритель это никогда не видит и не слышит.</p>
+    <div class="cheatsheet-cols">
+      <div>
+        <h3>Эффект</h3>
+        <ul>
+          <li><b>1</b> — ровное свечение</li>
+          <li><b>2</b> — пульс</li>
+          <li><b>3</b> — вспышка</li>
+          <li><b>4</b> — бегущие огни</li>
+          <li><b>5</b> — мерцание</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Цвет</h3>
+        <ul>
+          <li><b>1</b> — синий</li>
+          <li><b>2</b> — красный</li>
+          <li><b>3</b> — золотой</li>
+          <li><b>4</b> — белый</li>
+          <li><b>5</b> — зелёный</li>
+          <li><b>6</b> — фиолетовый</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>
