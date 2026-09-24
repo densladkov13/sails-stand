@@ -78,8 +78,9 @@ def run_update_and_exit() -> None:
     заново через несколько секунд уже со свежим кодом."""
     print("[yacht_client] Получена команда обновления: git pull...")
     try:
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
         result = subprocess.run(
-            ["git", "pull"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=60
+            ["git", "pull"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=60, env=env
         )
         print(result.stdout)
         print(result.stderr)

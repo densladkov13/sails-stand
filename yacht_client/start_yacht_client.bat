@@ -1,6 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 cd /d "%~dp0\.."
+set "GIT_TERMINAL_PROMPT=0"
 
 rem Pinned Python version to auto-install if none is found. Bump PYVER and
 rem PYUSERDIR together (the installer folder is named after MAJOR.MINOR only).
@@ -8,6 +9,15 @@ set "PYVER=3.11.9"
 set "PYUSERDIR=%LocalAppData%\Programs\Python\Python311"
 set "PYURL=https://www.python.org/ftp/python/%PYVER%/python-%PYVER%-amd64.exe"
 set "PYINSTALLER=%TEMP%\python-%PYVER%-installer.exe"
+
+rem Pinned portable Git, and the project's GitHub URL - used to auto-install
+rem Git if missing, and to auto-repair a folder that was copied by hand
+rem instead of cloned (so it can't self-update). Same pattern as Python above.
+set "GITVER=2.46.0"
+set "GITUSERDIR=%LocalAppData%\Programs\MinGit"
+set "GITURL=https://github.com/git-for-windows/git/releases/download/v%GITVER%.windows.1/MinGit-%GITVER%-64-bit.zip"
+set "GITZIP=%TEMP%\mingit-%GITVER%.zip"
+set "REPO_URL=https://github.com/densladkov13/sails-stand.git"
 
 echo ============================================================
 echo   SAILS - yacht client
@@ -23,7 +33,7 @@ if not defined PYTHON_EXE (
 )
 
 if not defined PYTHON_EXE (
-    echo [1/3] Python not found - downloading Python %PYVER% ^(needs internet^)...
+    echo [1/4] Python not found - downloading Python %PYVER% ^(needs internet^)...
     powershell -NoProfile -ExecutionPolicy Bypass -Command ^
         "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest -Uri '%PYURL%' -OutFile '%PYINSTALLER%' -UseBasicParsing } catch { Write-Host $_.Exception.Message; exit 1 }"
     if errorlevel 1 (
@@ -55,12 +65,58 @@ if not defined PYTHON_EXE (
     )
     echo Python installed.
 ) else (
-    echo [1/3] Python found: !PYTHON_EXE!
+    echo [1/4] Python found: !PYTHON_EXE!
 )
 
-rem ---------- 2. Virtual environment + dependencies ----------
+rem ---------- 2. Find or install Git (needed only for updates) ----------
+set "GIT_EXE="
+where git.exe >nul 2>nul
+if not errorlevel 1 set "GIT_EXE=git"
+if not defined GIT_EXE (
+    if exist "%GITUSERDIR%\cmd\git.exe" set "GIT_EXE=%GITUSERDIR%\cmd\git.exe"
+)
+if not defined GIT_EXE (
+    echo [2/4] Git not found - downloading a portable copy ^(needs internet^)...
+    powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+        "[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; try { Invoke-WebRequest -Uri '%GITURL%' -OutFile '%GITZIP%' -UseBasicParsing } catch { Write-Host $_.Exception.Message; exit 1 }"
+    if not errorlevel 1 (
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+            "Expand-Archive -Path '%GITZIP%' -DestinationPath '%GITUSERDIR%' -Force"
+    )
+    if exist "%GITUSERDIR%\cmd\git.exe" (
+        set "GIT_EXE=%GITUSERDIR%\cmd\git.exe"
+        echo Git installed.
+    ) else (
+        echo WARNING: could not set up Git - the app will still run fine, but
+        echo automatic updates ^(update.bat / the admin panel^) will not work
+        echo until Git is installed manually from git-scm.com.
+    )
+) else (
+    echo [2/4] Git found: !GIT_EXE!
+)
+
+rem ---------- 3. Repair a folder that was copied by hand instead of cloned ----------
+rem (so it has no .git and can't self-update) - safe: only adds git tracking,
+rem never touches or overwrites any existing file in this folder.
+if defined GIT_EXE (
+    if not exist ".git" (
+        echo Connecting this folder to Git so it can update itself...
+        "!GIT_EXE!" init -q
+        "!GIT_EXE!" remote add origin "%REPO_URL%" >nul 2>nul
+        "!GIT_EXE!" fetch origin -q
+        if not errorlevel 1 (
+            "!GIT_EXE!" reset origin/master >nul
+            echo Connected - update.bat and the admin panel will work from now on.
+        ) else (
+            echo WARNING: could not reach GitHub to connect this folder. The app
+            echo will still run; automatic updates can be set up later.
+        )
+    )
+)
+
+rem ---------- 4. Virtual environment + dependencies ----------
 if not exist ".venv\Scripts\python.exe" (
-    echo [2/3] Creating virtual environment...
+    echo [3/4] Creating virtual environment...
     "!PYTHON_EXE!" -m venv .venv
     if errorlevel 1 (
         echo.
@@ -70,7 +126,7 @@ if not exist ".venv\Scripts\python.exe" (
     )
 )
 
-echo [3/3] Checking dependencies...
+echo [4/4] Checking dependencies...
 ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r requirements.txt
 if errorlevel 1 (
     echo.

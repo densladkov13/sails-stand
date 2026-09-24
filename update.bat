@@ -1,6 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 cd /d "%~dp0"
+set "GIT_TERMINAL_PROMPT=0"
 
 echo ============================================================
 echo   SAILS - update to latest version
