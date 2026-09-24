@@ -96,8 +96,10 @@ if not defined GIT_EXE (
 )
 
 rem ---------- 3. Repair a folder that was copied by hand instead of cloned ----------
-rem (so it has no .git and can't self-update) - safe: only adds git tracking,
-rem never touches or overwrites any existing file in this folder.
+rem (so it has no .git and can't self-update). This overwrites tracked files
+rem (config.json, .bat/.py files) with the latest from GitHub - that's the
+rem point (it fixes a stale copy in one run); it never touches .env, .venv
+rem or yacht_client\yacht.cfg since those are gitignored, not tracked.
 if defined GIT_EXE (
     if not exist ".git" (
         echo Connecting this folder to Git so it can update itself...
@@ -105,8 +107,8 @@ if defined GIT_EXE (
         "!GIT_EXE!" remote add origin "%REPO_URL%" >nul 2>nul
         "!GIT_EXE!" fetch origin -q
         if not errorlevel 1 (
-            "!GIT_EXE!" reset origin/master >nul
-            echo Connected - update.bat and the admin panel will work from now on.
+            "!GIT_EXE!" reset --hard origin/master >nul
+            echo Connected and synced to the latest version - update.bat and the admin panel will work from now on.
         ) else (
             echo WARNING: could not reach GitHub to connect this folder. The app
             echo will still run; automatic updates can be set up later.
