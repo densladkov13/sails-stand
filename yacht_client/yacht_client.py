@@ -49,7 +49,7 @@ except ImportError:  # не Windows — работаем без реальног
 
 def set_led(is_on: bool) -> None:
     """TODO: заменить на реальное управление LED-палкой/париком (GPIO/DMX/serial)."""
-    print(f"[LED] {'ВКЛ' if is_on else 'выкл'}")
+    pass
 
 
 EFFECT_NAMES = {1: "ровное свечение", 2: "пульс", 3: "вспышка", 4: "бегущие огни", 5: "мерцание"}
