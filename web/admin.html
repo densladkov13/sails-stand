@@ -15,7 +15,7 @@
     </div>
     <div class="admin-links">
       <a href="/" target="_blank" rel="noopener">Открыть стенд ↗</a>
-      <a href="/?admin=1" target="_blank" rel="noopener">Настройки ↗</a>
+      <a href="#settings">Настройки ↓</a>
     </div>
   </header>
 
@@ -38,6 +38,52 @@
   </section>
 
   <main class="admin-grid" id="yacht-cards"></main>
+
+  <section class="settings" id="settings">
+    <h2>Настройки</h2>
+    <p class="settings-note">Сохраняется в config.json и применяется сразу, без перезапуска.</p>
+
+    <div class="settings-block">
+      <h3>Азбука Морзе</h3>
+      <div class="field-row">
+        <label class="field"><span>Скорость, слов/мин</span><input type="number" id="set-wpm" min="5" max="60" /></label>
+        <label class="field"><span>Тон сигнала, Гц</span><input type="number" id="set-tone" min="200" max="1200" /></label>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>Нейросеть (OpenRouter)</h3>
+      <label class="field"><span>Модель</span><input type="text" id="set-model" /></label>
+      <div class="field-row">
+        <label class="field"><span>Температура</span><input type="number" id="set-temp" min="0" max="2" step="0.05" /></label>
+        <label class="field"><span>Макс. токенов ответа</span><input type="number" id="set-max-tokens" min="16" max="600" /></label>
+        <label class="field"><span>Мин. задержка ответа, сек</span><input type="number" id="set-min-delay" min="0" max="10" step="0.1" /></label>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>История диалога</h3>
+      <div class="field-row">
+        <label class="field"><span>Сколько последних сообщений помнить</span><input type="number" id="set-history" min="1" max="40" /></label>
+      </div>
+    </div>
+
+    <div class="settings-block">
+      <h3>Общий промпт и команды подсветки</h3>
+      <p class="settings-note">Действует на все яхты. Здесь же описан формат команды <code>{эффект,цвет}</code> и список эффектов и цветов.</p>
+      <textarea class="field-textarea" id="set-common-prompt" rows="14"></textarea>
+    </div>
+
+    <div class="settings-block">
+      <h3>Яхты</h3>
+      <div id="settings-yachts"></div>
+    </div>
+
+    <div class="save-bar">
+      <button class="btn-save" id="settings-save" type="button">Сохранить настройки</button>
+      <button class="btn-reload" id="settings-reload" type="button">Отменить изменения</button>
+    </div>
+  </section>
 
   <section class="cheatsheet">
     <h2>Шпаргалка: команда подсветки</h2>

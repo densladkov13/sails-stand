@@ -250,6 +250,92 @@
     showToast("Команда обновления отправлена компьютеру яхт");
   });
 
+  // ---------- Настройки (раньше были отдельным окном на стенде) ----------
+  const $ = (id) => document.getElementById(id);
+  const settingsYachtsEl = $("settings-yachts");
+
+  function escapeAttr(str) {
+    return escapeHtml(str).replace(/"/g, "&quot;");
+  }
+
+  async function loadSettingsForm() {
+    try {
+      const resp = await fetch("/api/settings");
+      const cfg = await resp.json();
+      $("set-wpm").value = cfg.morse?.wpm ?? 20;
+      $("set-tone").value = cfg.morse?.tone_hz ?? 600;
+      $("set-model").value = cfg.openrouter?.model ?? "";
+      $("set-temp").value = cfg.openrouter?.temperature ?? 0.9;
+      $("set-max-tokens").value = cfg.openrouter?.max_tokens ?? 70;
+      $("set-min-delay").value = cfg.min_reply_delay_seconds ?? 0.5;
+      $("set-history").value = cfg.max_history_length ?? 10;
+      $("set-common-prompt").value = cfg.system_prompt_common ?? "";
+
+      settingsYachtsEl.innerHTML = "";
+      (cfg.yachts || []).forEach((y) => {
+        const card = document.createElement("div");
+        card.className = "yacht-settings-card";
+        card.dataset.yachtId = y.id;
+        card.innerHTML = `
+          <div class="field-row">
+            <label class="field icon-field"><span>Значок</span>
+              <input type="text" class="set-yacht-icon" value="${escapeAttr(y.icon || "⛵")}" maxlength="4" /></label>
+            <label class="field"><span>Имя яхты</span>
+              <input type="text" class="set-yacht-name" value="${escapeAttr(y.name || y.id)}" maxlength="40" /></label>
+          </div>
+          <label class="field-checkbox">
+            <input type="checkbox" class="set-yacht-enabled" ${y.enabled !== false ? "checked" : ""} />
+            <span>Активна на стенде (показывается зрителям)</span>
+          </label>
+          <label class="field"><span>Характер / системный промпт</span>
+            <textarea class="field-textarea set-yacht-prompt" rows="7">${escapeHtml(y.system_prompt || "")}</textarea></label>
+        `;
+        settingsYachtsEl.appendChild(card);
+      });
+    } catch (e) {
+      showToast("Не удалось загрузить настройки");
+    }
+  }
+
+  async function saveSettings() {
+    const yachtsPayload = [...settingsYachtsEl.querySelectorAll(".yacht-settings-card")].map((card) => ({
+      id: card.dataset.yachtId,
+      icon: card.querySelector(".set-yacht-icon").value,
+      name: card.querySelector(".set-yacht-name").value,
+      system_prompt: card.querySelector(".set-yacht-prompt").value,
+      enabled: card.querySelector(".set-yacht-enabled").checked,
+    }));
+    const payload = {
+      morse: { wpm: Number($("set-wpm").value), tone_hz: Number($("set-tone").value) },
+      openrouter: {
+        model: $("set-model").value,
+        temperature: Number($("set-temp").value),
+        max_tokens: Number($("set-max-tokens").value),
+      },
+      max_history_length: Number($("set-history").value),
+      min_reply_delay_seconds: Number($("set-min-delay").value),
+      system_prompt_common: $("set-common-prompt").value,
+      yachts: yachtsPayload,
+    };
+    try {
+      const resp = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) throw new Error("bad response");
+      await resp.json();
+      showToast("Настройки сохранены и применены");
+      loadSettingsForm();
+    } catch (e) {
+      showToast("Не удалось сохранить настройки");
+    }
+  }
+
+  $("settings-save").addEventListener("click", saveSettings);
+  $("settings-reload").addEventListener("click", () => { loadSettingsForm(); showToast("Изменения отменены"); });
+
   loadYachts();
+  loadSettingsForm();
   connect();
 })();
