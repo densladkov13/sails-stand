@@ -345,9 +345,10 @@ async def ws_display(ws: WebSocket) -> None:
                 yacht_id = data.get("yacht_id", "")
                 asyncio.create_task(handle_reset(yacht_id))
             elif msg_type == "trigger_yacht_update":
-                yacht_id = data.get("yacht_id", "")
-                if yacht_id in cfg.YACHTS_BY_ID:
-                    asyncio.create_task(manager.send_to_yacht(yacht_id, {"type": "update"}))
+                # один компьютер обслуживает все яхты — достаточно одной команды
+                online_id = next((y for y in cfg.YACHTS_BY_ID if manager.is_yacht_online(y)), None)
+                if online_id:
+                    asyncio.create_task(manager.send_to_yacht(online_id, {"type": "update"}))
     except WebSocketDisconnect:
         pass
     finally:

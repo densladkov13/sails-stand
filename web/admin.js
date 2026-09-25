@@ -76,7 +76,6 @@
             <button class="btn-send">Отправить</button>
             <button class="btn-clear">Очистить историю</button>
           </div>
-          <button class="btn-update small">Обновить компьютер яхты</button>
         </div>
       `;
       cardsEl.appendChild(card);
@@ -85,7 +84,6 @@
       const input = card.querySelector("input");
       const sendBtn = card.querySelector(".btn-send");
       const clearBtn = card.querySelector(".btn-clear");
-      const updateBtn = card.querySelector(".btn-update");
 
       function doSend() {
         const text = input.value.trim();
@@ -99,7 +97,6 @@
         if (!window.confirm(`Очистить историю «${y.name || y.id}»?`)) return;
         sendWS({ type: "reset_history", yacht_id: y.id });
       });
-      updateBtn.addEventListener("click", () => triggerYachtUpdate(y.id, y.name || y.id));
 
       if (!enabled) {
         input.disabled = true;
@@ -243,11 +240,15 @@
     }
   });
 
-  function triggerYachtUpdate(yachtId, yachtName) {
-    if (!window.confirm(`Обновить компьютер яхты «${yachtName}»? Он ненадолго отключится и перезапустится.`)) return;
-    sendWS({ type: "trigger_yacht_update", yacht_id: yachtId });
-    showToast(`Команда обновления отправлена яхте «${yachtName}»`);
-  }
+  document.getElementById("yacht-update-btn").addEventListener("click", () => {
+    if (!Object.values(stateById).some((st) => st.online)) {
+      showToast("Компьютер яхт сейчас не подключён");
+      return;
+    }
+    if (!window.confirm("Обновить компьютер яхт? Он ненадолго отключится и перезапустится.")) return;
+    sendWS({ type: "trigger_yacht_update" });
+    showToast("Команда обновления отправлена компьютеру яхт");
+  });
 
   loadYachts();
   connect();
