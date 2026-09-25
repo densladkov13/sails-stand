@@ -226,6 +226,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8000, help="Порт сервера стенда")
     parser.add_argument("--udp-host", default="127.0.0.1", help="Куда слать UDP-таблицу (TouchDesigner)")
     parser.add_argument("--udp-port", type=int, default=7000, help="UDP-порт TouchDesigner")
+    parser.add_argument("--yacht", help="устарел, игнорируется (клиент сам подключается ко всем яхтам)")
     args = parser.parse_args()
 
     try:
