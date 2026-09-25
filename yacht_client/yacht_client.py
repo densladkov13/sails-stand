@@ -142,7 +142,7 @@ class LedTable:
 
     def update(self, number: int, effect: int, color: int) -> None:
         self.rows[number - 1] = [number, effect, color]
-        payload = "\n".join(" ".join(str(x) for x in row) for row in self.rows)
+        payload = "\n".join(" ".join(str(x) for x in row) for row in self.rows) + "\n"
         try:
             self.sock.sendto(payload.encode("utf-8"), self.addr)
         except OSError as e:
