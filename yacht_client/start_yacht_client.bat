@@ -138,36 +138,39 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem ---------- Stand address + yacht id: ask once, remember for next time ----------
-rem (so this can auto-start unattended after a reboot without anyone typing
-rem anything - delete yacht_client\yacht.cfg to be asked again)
-set "CFG_FILE=yacht_client\yacht.cfg"
+rem ---------- Stand address + UDP target: ask once, remember for next time ----------
+rem (so this can auto-start unattended after a reboot - delete
+rem yacht_client\stand.cfg to be asked again). One computer serves ALL yachts.
+set "CFG_FILE=yacht_client\stand.cfg"
 if exist "%CFG_FILE%" goto load_cfg
 goto ask_cfg
 
 :load_cfg
-for /f "usebackq tokens=1,2 delims=|" %%a in ("%CFG_FILE%") do (
+for /f "usebackq tokens=1,2,3 delims=|" %%a in ("%CFG_FILE%") do (
     set "STAND_HOST=%%a"
-    set "YACHT_ID=%%b"
+    set "UDP_HOST=%%b"
+    set "UDP_PORT=%%c"
 )
-echo Using saved settings: %STAND_HOST% / %YACHT_ID%  ^(delete %CFG_FILE% to change^)
+echo Using saved settings: stand %STAND_HOST%, UDP %UDP_HOST%:%UDP_PORT%  ^(delete %CFG_FILE% to change^)
 goto cfg_done
 
 :ask_cfg
 echo.
-set /p STAND_HOST=Stand computer address (hostname.local or IP, e.g. SAILS-STAND.local):
+set /p STAND_HOST=Stand computer address (IP, e.g. 192.168.8.10):
 if "%STAND_HOST%"=="" set "STAND_HOST=127.0.0.1"
-set /p YACHT_ID=Yacht id from config.json [yacht1]:
-if "%YACHT_ID%"=="" set "YACHT_ID=yacht1"
-echo %STAND_HOST%^|%YACHT_ID%>"%CFG_FILE%"
+set /p UDP_HOST=Send LED table by UDP to IP [127.0.0.1]:
+if "%UDP_HOST%"=="" set "UDP_HOST=127.0.0.1"
+set /p UDP_PORT=UDP port [7000]:
+if "%UDP_PORT%"=="" set "UDP_PORT=7000"
+echo %STAND_HOST%^|%UDP_HOST%^|%UDP_PORT%>"%CFG_FILE%"
 echo Saved - next time this starts automatically, without asking.
 
 :cfg_done
 echo.
-echo Connecting to %STAND_HOST%:8000 as "%YACHT_ID%" ^(auto-reconnects; close this window to stop^)...
+echo Connecting to %STAND_HOST%:8000 for all yachts ^(auto-reconnects; close this window to stop^)...
 echo.
 :runloop
-".venv\Scripts\python.exe" "yacht_client\yacht_client.py" --host %STAND_HOST% --port 8000 --yacht %YACHT_ID%
+".venv\Scripts\python.exe" "yacht_client\yacht_client.py" --host %STAND_HOST% --port 8000 --udp-host %UDP_HOST% --udp-port %UDP_PORT%
 echo.
 echo ------------------------------------------------------------
 echo Client stopped or crashed just now ^(see the error above, if any^).

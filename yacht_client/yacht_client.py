@@ -29,8 +29,10 @@ import argparse
 import asyncio
 import json
 import os
+import socket
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -128,62 +130,106 @@ def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> None:
             time.sleep(unit * 4)  # добираем межсловный интервал (итого 7)
 
 
-async def run(host: str, port: int, yacht_id: str) -> None:
-    config_url = f"http://{host}:{port}/api/config"
+class LedTable:
+    """Таблица 3x3 для TouchDesigner: строка на яхту "номер эффект цвет".
+    Приходит всегда целиком; при новой команде меняется только строка
+    текущей яхты, остальные хранят последнее значение."""
+
+    def __init__(self, count: int, udp_host: str, udp_port: int) -> None:
+        self.rows = [[n, 0, 0] for n in range(1, count + 1)]
+        self.addr = (udp_host, udp_port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+    def update(self, number: int, effect: int, color: int) -> None:
+        self.rows[number - 1] = [number, effect, color]
+        payload = "\n".join(" ".join(str(x) for x in row) for row in self.rows)
+        try:
+            self.sock.sendto(payload.encode("utf-8"), self.addr)
+        except OSError as e:
+            print(f"[UDP] не удалось отправить: {e}")
+        print(f"[UDP] -> {self.addr[0]}:{self.addr[1]}\n{payload}")
+
+
+play_lock = threading.Lock()
+update_started = False
+
+
+def play_locked(morse: str, wpm: float, tone_hz: int) -> None:
+    with play_lock:
+        play_morse_blocking(morse, wpm, tone_hz)
+
+
+async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: LedTable, wpm: float, tone_hz: int) -> None:
+    global update_started
     ws_url = f"ws://{host}:{port}/ws/yacht/{yacht_id}"
-
-    wpm, tone_hz = 15, 600
-    try:
-        resp = requests.get(config_url, timeout=5)
-        resp.raise_for_status()
-        morse_cfg = resp.json().get("morse", {})
-        wpm = morse_cfg.get("wpm", wpm)
-        tone_hz = morse_cfg.get("tone_hz", tone_hz)
-    except Exception as e:
-        print(f"[yacht_client] Не удалось получить конфиг со стенда ({e}), использую значения по умолчанию.")
-
     backoff = 1.0
     while True:
         try:
             print(f"[yacht_client] Подключение к {ws_url} ...")
             async with websockets.connect(ws_url) as ws:
-                print(f"[yacht_client] Подключено как '{yacht_id}'. Ожидание сообщений...")
+                print(f"[yacht_client] Подключено: {yacht_id} (яхта №{number})")
                 backoff = 1.0
                 async for raw in ws:
                     data = json.loads(raw)
                     msg_type = data.get("type")
 
                     if msg_type == "update":
-                        await asyncio.to_thread(run_update_and_exit)
+                        if not update_started:
+                            update_started = True
+                            await asyncio.to_thread(run_update_and_exit)
+                            update_started = False
                         continue
 
                     if msg_type != "play_morse":
                         continue
-                    sender = data.get("sender")
                     text = data.get("text", "")
                     morse = data.get("morse", "")
                     effect, color = data.get("effect"), data.get("color")
-                    print(f"[yacht_client] Проигрываю ({sender}): {text!r} -> {morse}")
+                    print(f"[yacht_client] {yacht_id} ({data.get('sender')}): {text!r} -> {morse}")
                     if effect is not None and color is not None:
                         set_led_effect(effect, color)
-                    await asyncio.to_thread(play_morse_blocking, morse, wpm, tone_hz)
+                        table.update(number, effect, color)
+                    await asyncio.to_thread(play_locked, morse, wpm, tone_hz)
         except (websockets.ConnectionClosed, OSError) as e:
-            print(f"[yacht_client] Соединение потеряно ({e}). Переподключение через {backoff:.0f}с...")
+            print(f"[yacht_client] {yacht_id}: соединение потеряно ({e}). Повтор через {backoff:.0f}с...")
         except Exception as e:
-            print(f"[yacht_client] Неожиданная ошибка: {e}. Переподключение через {backoff:.0f}с...")
+            print(f"[yacht_client] {yacht_id}: ошибка: {e}. Повтор через {backoff:.0f}с...")
         await asyncio.sleep(backoff)
         backoff = min(backoff * 1.6, 15.0)
 
 
+async def run(host: str, port: int, udp_host: str, udp_port: int) -> None:
+    wpm, tone_hz = 15, 600
+    yacht_ids = []
+    while not yacht_ids:
+        try:
+            base = f"http://{host}:{port}"
+            settings = requests.get(f"{base}/api/settings", timeout=5).json()
+            morse_cfg = settings.get("morse", {})
+            wpm = morse_cfg.get("wpm", wpm)
+            tone_hz = morse_cfg.get("tone_hz", tone_hz)
+            yacht_ids = [y["id"] for y in settings.get("yachts", [])]
+        except Exception as e:
+            print(f"[yacht_client] Стенд {host}:{port} пока недоступен ({e}). Повтор через 5с...")
+            await asyncio.sleep(5)
+
+    print(f"[yacht_client] Яхты: {yacht_ids}. UDP-таблица -> {udp_host}:{udp_port}")
+    table = LedTable(len(yacht_ids), udp_host, udp_port)
+    await asyncio.gather(
+        *[yacht_loop(host, port, yid, n, table, wpm, tone_hz) for n, yid in enumerate(yacht_ids, start=1)]
+    )
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Клиент яхты для проекта 'Паруса'")
-    parser.add_argument("--host", default="127.0.0.1", help="IP-адрес стенда в сети Wi-Fi")
+    parser = argparse.ArgumentParser(description="Клиент яхт для проекта 'Паруса' (один компьютер на все яхты)")
+    parser.add_argument("--host", default="127.0.0.1", help="Адрес компьютера стенда в сети")
     parser.add_argument("--port", type=int, default=8000, help="Порт сервера стенда")
-    parser.add_argument("--yacht", required=True, help="ID яхты из config.json (например yacht1)")
+    parser.add_argument("--udp-host", default="127.0.0.1", help="Куда слать UDP-таблицу (TouchDesigner)")
+    parser.add_argument("--udp-port", type=int, default=7000, help="UDP-порт TouchDesigner")
     args = parser.parse_args()
 
     try:
-        asyncio.run(run(args.host, args.port, args.yacht))
+        asyncio.run(run(args.host, args.port, args.udp_host, args.udp_port))
     except KeyboardInterrupt:
         print("\n[yacht_client] Остановлено пользователем.")
         sys.exit(0)

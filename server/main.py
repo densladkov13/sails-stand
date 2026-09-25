@@ -126,7 +126,7 @@ def _now_iso() -> str:
 # Нейросеть дописывает в конец ответа служебную метку вида {эффект,цвет}
 # (например {2,1}) — сигнал для LED-палки на борту. Зритель её никогда не
 # видит и не слышит: вырезаем до того, как текст попадёт в чат/азбуку Морзе.
-_EFFECT_COMMAND_RE = re.compile(r"\{\s*([1-9])\s*,\s*([1-9])\s*\}")
+_EFFECT_COMMAND_RE = re.compile(r"\{\s*([1-9]\d?)\s*,\s*([1-9]\d?)\s*\}")
 
 
 def _extract_effect_command(text: str) -> Tuple[str, Optional[int], Optional[int]]:

@@ -1,6 +1,7 @@
 # Секреты и локальные настройки — никогда не коммитим
 .env
 yacht_client/yacht.cfg
+yacht_client/stand.cfg
 
 # Виртуальное окружение и Python-мусор
 .venv/
