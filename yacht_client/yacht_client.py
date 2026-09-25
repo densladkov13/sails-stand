@@ -180,8 +180,8 @@ async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: Le
                             update_started = False
                         continue
 
-                    if msg_type != "play_morse":
-                        continue
+                    if msg_type != "play_morse" or data.get("sender") != "yacht":
+                        continue  # реплики зрителя звучат на стенде, здесь — только ответы яхт
                     text = data.get("text", "")
                     morse = data.get("morse", "")
                     effect, color = data.get("effect"), data.get("color")

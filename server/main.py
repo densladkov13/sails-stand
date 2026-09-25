@@ -30,7 +30,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import config as cfg
 from .history import ConversationStore
-from .morse import text_to_morse
+from .morse import morse_duration_ms, text_to_morse
 from .openrouter_client import call_openrouter
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(name)s: %(message)s")
@@ -117,6 +117,7 @@ manager = ConnectionManager()
 # пока лок занят, новые сообщения от зрителя игнорируются (кнопка отправки у него
 # всё равно заблокирована на клиенте — см. рассылку "busy" ниже).
 conversation_lock = asyncio.Lock()
+viewer_playback_end = 0.0
 
 
 def _now_iso() -> str:
@@ -153,8 +154,18 @@ def _make_chat_event(yacht_id: str, sender: str, text: str) -> Dict[str, Any]:
 async def _broadcast_and_log(
     event: Dict[str, Any], effect: Optional[int] = None, color: Optional[int] = None
 ) -> None:
+    global viewer_playback_end
     display_log[event["yacht_id"]].append(event)
     await manager.broadcast_display(event)
+
+    duration_s = morse_duration_ms(event["morse"], cfg.MORSE_SETTINGS.get("wpm", 20)) / 1000.0
+    if event["sender"] == "viewer":
+        # Сообщение зрителя звучит только на стенде; запоминаем, когда оно
+        # доиграет, чтобы ответ яхты на колонке начался вместе с ответом на экране.
+        viewer_playback_end = time.monotonic() + duration_s + 0.3
+        return
+
+    # Ответ яхты звучит только на колонке яхты.
     play_msg: Dict[str, Any] = {
         "type": "play_morse",
         "yacht_id": event["yacht_id"],
@@ -166,7 +177,14 @@ async def _broadcast_and_log(
         # Идёт только клиенту на яхте — на стенд/дисплеи эти поля не попадают.
         play_msg["effect"] = effect
         play_msg["color"] = color
-    await manager.send_to_yacht(event["yacht_id"], play_msg)
+
+    async def _send_when_stand_is_done() -> None:
+        wait = viewer_playback_end - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        await manager.send_to_yacht(event["yacht_id"], play_msg)
+
+    asyncio.create_task(_send_when_stand_is_done())
 
 
 async def handle_user_message(yacht_id: str, text: str) -> None:

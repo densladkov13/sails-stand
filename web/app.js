@@ -388,7 +388,8 @@
     while (playQueue.length) {
       const ev = playQueue.shift();
       const rendered = appendBubble(ev.yacht_id, ev, false);
-      if (rendered) await playMorse(rendered);
+      // Ответ яхты звучит на колонке яхты, а не на стенде — тут только картинка.
+      if (rendered) await playMorse({ ...rendered, muted: ev.sender === "yacht" });
     }
     isPlaying = false;
     updateInputLock();
@@ -411,7 +412,7 @@
     return audioCtx;
   }
 
-  function playMorse({ canvas, schedule, colorOn, colorMute, letterEls }) {
+  function playMorse({ canvas, schedule, colorOn, colorMute, letterEls, muted }) {
     return new Promise((resolve) => {
       const { events, totalMs, letterEndsMs } = schedule;
       if (!events.length) { resolve(); return; }
@@ -426,7 +427,7 @@
       osc.type = "sine";
       osc.frequency.value = toneHz;
       gain.gain.setValueAtTime(0, ctx.currentTime);
-      osc.connect(gain).connect(ctx.destination);
+      if (!muted) osc.connect(gain).connect(ctx.destination);
       osc.start();
 
       // Короткое плавное нарастание/спад громкости на каждом сигнале — без него
