@@ -17,6 +17,7 @@
 """
 import asyncio
 import datetime
+import json
 import logging
 import os
 import re
@@ -383,8 +384,18 @@ async def ws_yacht(ws: WebSocket, yacht_id: str) -> None:
     await manager.broadcast_display({"type": "yacht_online", "yacht_id": yacht_id, "online": True})
     try:
         while True:
-            # клиент яхты не обязан ничего слать, но держим соединение живым
-            await ws.receive_text()
+            raw = await ws.receive_text()
+            try:
+                data = json.loads(raw)
+            except ValueError:
+                continue
+            if data.get("type") == "update_result":
+                await manager.broadcast_display({
+                    "type": "yacht_update_result",
+                    "ok": bool(data.get("ok")),
+                    "changed": bool(data.get("changed")),
+                    "output": str(data.get("output", ""))[:300],
+                })
     except WebSocketDisconnect:
         pass
     finally:

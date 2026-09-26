@@ -204,6 +204,11 @@
         showToast("История очищена");
         break;
       }
+      case "yacht_update_result":
+        if (!data.ok) showToast("Обновление яхт не удалось: " + data.output);
+        else if (data.changed) showToast("Компьютер яхт обновился (" + data.output + ") и перезапускается");
+        else showToast("Компьютер яхт уже на последней версии (" + data.output + ")");
+        break;
       case "config_updated":
         loadYachts();
         break;

@@ -67,41 +67,65 @@ def set_led_effect(effect: int, color: int) -> None:
     print(f"[LED-EFFECT] {effect_name} / {color_name} (raw: {{{effect},{color}}})")
 
 
-def run_update_and_exit() -> None:
-    """Команда с панели оператора: git pull + переустановка зависимостей,
-    затем процесс завершается — start_yacht_client.bat сам поднимет его
-    заново через несколько секунд уже со свежим кодом."""
-    print("[yacht_client] Получена команда обновления: git pull...")
+REPO_URL = "https://github.com/densladkov13/sails-stand.git"
+
+
+def find_git() -> str:
+    """git из PATH, а если его нет — портативный MinGit, который ставит start-скрипт."""
+    mingit = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "MinGit" / "cmd" / "git.exe"
+    if mingit.exists():
+        return str(mingit)
+    return "git"
+
+
+def _git(args: list, timeout: int = 90) -> "subprocess.CompletedProcess":
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    return subprocess.run(
+        [find_git()] + args, cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=timeout, env=env
+    )
+
+
+def current_version() -> str:
     try:
-        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-        result = subprocess.run(
-            ["git", "pull"], cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=60, env=env
-        )
-        print(result.stdout)
-        print(result.stderr)
-        if result.returncode != 0:
-            print("[yacht_client] git pull завершился с ошибкой, обновление отменено.")
-            return
+        return _git(["rev-parse", "--short", "HEAD"], 10).stdout.strip() or "нет git"
+    except Exception:
+        return "нет git"
 
-        changed = "Already up to date" not in (result.stdout or "") and "уже акту" not in (result.stdout or "").lower()
-        if not changed:
-            print("[yacht_client] Уже последняя версия, перезапуск не требуется.")
-            return
 
-        python_exe = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
-        if python_exe.exists():
-            pip = subprocess.run(
-                [str(python_exe), "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", "requirements.txt"],
-                cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=180,
-            )
-            print(pip.stdout)
-            print(pip.stderr)
+def run_update() -> dict:
+    """Команда с панели оператора: подтянуть код с GitHub (fetch + reset --hard —
+    на яхтенном компе локальных правок нет, зато так работает и у папки,
+    скопированной без .git) и переустановить зависимости. Возвращает итог."""
+    print("[yacht_client] Получена команда обновления...")
+    try:
+        before = current_version()
+        if not (PROJECT_ROOT / ".git").exists():
+            _git(["init", "-q"])
+            _git(["remote", "add", "origin", REPO_URL])
+        fetch = _git(["fetch", "origin"])
+        if fetch.returncode != 0:
+            msg = (fetch.stderr or fetch.stdout or "git fetch не удался").strip()
+            print(f"[yacht_client] Ошибка: {msg}")
+            return {"ok": False, "changed": False, "output": msg[:300]}
+        reset = _git(["reset", "--hard", "origin/master"])
+        if reset.returncode != 0:
+            msg = (reset.stderr or reset.stdout or "git reset не удался").strip()
+            print(f"[yacht_client] Ошибка: {msg}")
+            return {"ok": False, "changed": False, "output": msg[:300]}
+        after = current_version()
+        changed = before != after
+        if changed:
+            python_exe = PROJECT_ROOT / ".venv" / "Scripts" / "python.exe"
+            if python_exe.exists():
+                subprocess.run(
+                    [str(python_exe), "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", "requirements.txt"],
+                    cwd=str(PROJECT_ROOT), capture_output=True, text=True, timeout=180,
+                )
+        print(f"[yacht_client] Версия: {before} -> {after}")
+        return {"ok": True, "changed": changed, "output": f"{before} -> {after}"}
     except Exception as e:
         print(f"[yacht_client] Ошибка обновления: {e}")
-        return
-    print("[yacht_client] Обновление применено, перезапуск...")
-    time.sleep(1)
-    os._exit(0)
+        return {"ok": False, "changed": False, "output": str(e)[:300]}
 
 
 def build_morse_wav(morse: str, wpm: float, tone_hz: int) -> bytes:
@@ -210,7 +234,12 @@ async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: Le
                     if msg_type == "update":
                         if not update_started:
                             update_started = True
-                            await asyncio.to_thread(run_update_and_exit)
+                            result = await asyncio.to_thread(run_update)
+                            await ws.send(json.dumps({"type": "update_result", **result}))
+                            if result["ok"] and result["changed"]:
+                                print("[yacht_client] Обновление применено, перезапуск...")
+                                await asyncio.sleep(1)
+                                os._exit(0)
                             update_started = False
                         continue
 
@@ -247,7 +276,7 @@ async def run(host: str, port: int, udp_host: str, udp_port: int) -> None:
             print(f"[yacht_client] Стенд {host}:{port} пока недоступен ({e}). Повтор через 5с...")
             await asyncio.sleep(5)
 
-    print(f"[yacht_client] Яхты: {yacht_ids}. UDP-таблица -> {udp_host}:{udp_port}")
+    print(f"[yacht_client] Версия кода: {current_version()}. Яхты: {yacht_ids}. UDP-таблица -> {udp_host}:{udp_port}")
     table = LedTable(len(yacht_ids), udp_host, udp_port)
     await asyncio.gather(
         *[yacht_loop(host, port, yid, n, table, wpm, tone_hz) for n, yid in enumerate(yacht_ids, start=1)]
