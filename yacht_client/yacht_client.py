@@ -128,7 +128,7 @@ def run_update() -> dict:
         return {"ok": False, "changed": False, "output": str(e)[:300]}
 
 
-def build_morse_wav(morse: str, wpm: float, tone_hz: int) -> bytes:
+def build_morse_wav(morse: str, wpm: float, tone_hz: int, volume: float = 100.0) -> bytes:
     """Собирает всё сообщение азбукой Морзе в один WAV в памяти (16 бит, моно).
     Тайминг: точка = 1 единица, тире = 3, пауза между сигналами 1, между
     буквами 3, между словами 7 — как на сервере и на стенде. Короткие
@@ -146,7 +146,8 @@ def build_morse_wav(morse: str, wpm: float, tone_hz: int) -> bytes:
         r = max(1, int(rate * ramp))
         for i in range(n):
             env = min(1.0, i / r, (n - 1 - i) / r if n - 1 - i < r else 1.0)
-            samples.append(int(20000 * env * math.sin(2 * math.pi * tone_hz * i / rate)))
+            v = 32767 * (volume / 100.0) * env * math.sin(2 * math.pi * tone_hz * i / rate)
+            samples.append(int(max(-32767, min(32767, v))))
 
     words = [w.strip() for w in morse.split(" / ") if w.strip()]
     for w_idx, word in enumerate(words):
@@ -169,7 +170,7 @@ def build_morse_wav(morse: str, wpm: float, tone_hz: int) -> bytes:
     return buf.getvalue()
 
 
-def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> str:
+def play_morse_blocking(morse: str, wpm: float, tone_hz: int, volume: float = 100.0) -> str:
     """Проигрывает сообщение азбукой Морзе через звук Windows по умолчанию
     и ждёт, пока оно доиграет. Возвращает текст ошибки или "" если всё хорошо."""
     if not morse:
@@ -177,7 +178,7 @@ def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> str:
     error = ""
     set_led(True)
     try:
-        wav = build_morse_wav(morse, wpm, tone_hz)
+        wav = build_morse_wav(morse, wpm, tone_hz, volume)
         if winsound:
             winsound.PlaySound(wav, winsound.SND_MEMORY)
         else:
@@ -215,9 +216,9 @@ play_lock = threading.Lock()
 update_started = False
 
 
-def play_locked(morse: str, wpm: float, tone_hz: int) -> str:
+def play_locked(morse: str, wpm: float, tone_hz: int, volume: float = 100.0) -> str:
     with play_lock:
-        return play_morse_blocking(morse, wpm, tone_hz)
+        return play_morse_blocking(morse, wpm, tone_hz, volume)
 
 
 async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: LedTable, wpm: float, tone_hz: int) -> None:
@@ -248,9 +249,10 @@ async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: Le
 
                     if msg_type == "test_sound":
                         print("[yacht_client] Тест звука: SOS")
-                        err = await asyncio.to_thread(play_locked, "... --- ...", wpm, tone_hz)
+                        t_wpm, t_hz, t_vol = data.get("wpm", wpm), data.get("tone_hz", tone_hz), data.get("volume", 100)
+                        err = await asyncio.to_thread(play_locked, "... --- ...", t_wpm, t_hz, t_vol)
                         await ws.send(json.dumps({
-                            "type": "sound_result", "ok": not err, "output": err or f"{wpm} сл/мин, {tone_hz} Гц",
+                            "type": "sound_result", "ok": not err, "output": err or f"громкость {t_vol}%, {t_wpm} сл/мин, {t_hz} Гц",
                         }))
                         continue
 
@@ -263,7 +265,9 @@ async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: Le
                     if effect is not None and color is not None:
                         set_led_effect(effect, color)
                         table.update(number, effect, color)
-                    await asyncio.to_thread(play_locked, morse, wpm, tone_hz)
+                    await asyncio.to_thread(
+                        play_locked, morse, data.get("wpm", wpm), data.get("tone_hz", tone_hz), data.get("volume", 100)
+                    )
         except (websockets.ConnectionClosed, OSError) as e:
             print(f"[yacht_client] {yacht_id}: соединение потеряно ({e}). Повтор через {backoff:.0f}с...")
         except Exception as e:

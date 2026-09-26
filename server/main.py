@@ -152,6 +152,11 @@ def _make_chat_event(yacht_id: str, sender: str, text: str) -> Dict[str, Any]:
     }
 
 
+def _yacht_sound_params() -> Dict[str, Any]:
+    m = cfg.MORSE_SETTINGS
+    return {"wpm": m.get("wpm", 20), "tone_hz": m.get("tone_hz", 600), "volume": m.get("volume_yacht", 100)}
+
+
 async def _broadcast_and_log(
     event: Dict[str, Any], effect: Optional[int] = None, color: Optional[int] = None
 ) -> None:
@@ -173,6 +178,7 @@ async def _broadcast_and_log(
         "sender": event["sender"],
         "text": event["text"],
         "morse": event["morse"],
+        **_yacht_sound_params(),
     }
     if effect is not None and color is not None:
         # Идёт только клиенту на яхте — на стенд/дисплеи эти поля не попадают.
@@ -372,7 +378,7 @@ async def ws_display(ws: WebSocket) -> None:
             elif msg_type == "test_yacht_sound":
                 online_id = next((y for y in cfg.YACHTS_BY_ID if manager.is_yacht_online(y)), None)
                 if online_id:
-                    asyncio.create_task(manager.send_to_yacht(online_id, {"type": "test_sound"}))
+                    asyncio.create_task(manager.send_to_yacht(online_id, {"type": "test_sound", **_yacht_sound_params()}))
             elif msg_type == "trigger_yacht_update":
                 # один компьютер обслуживает все яхты — достаточно одной команды
                 online_id = next((y for y in cfg.YACHTS_BY_ID if manager.is_yacht_online(y)), None)

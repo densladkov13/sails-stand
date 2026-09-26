@@ -17,7 +17,7 @@
   let reconnectDelay = 1000;
   let yachts = [];
   let activeYachtId = null;
-  let morseSettings = { wpm: 20, tone_hz: 600 };
+  let morseSettings = { wpm: 20, tone_hz: 600, volume_stand: 20 };
   let serverBusy = false; // на стенде уже идёт обмен репликами с какой-то яхтой
   let onlineById = {}; // подключён ли компьютер на этой яхте по Wi-Fi прямо сейчас
 
@@ -431,7 +431,7 @@
 
       // Короткое плавное нарастание/спад громкости на каждом сигнале — без него
       // мгновенный скачок гейна на каждой точке/тире звучит как резкий щелчок/дребезг.
-      const PEAK_GAIN = 0.2;
+      const PEAK_GAIN = (morseSettings.volume_stand ?? 20) / 100;
       events.forEach(({ onMs, offMs }) => {
         const onAt = t0 + onMs / 1000;
         const offAt = t0 + offMs / 1000;

@@ -93,6 +93,10 @@ def save_config(payload: Dict[str, Any]) -> Dict[str, Any]:
             updated["morse"]["wpm"] = int(_clamp(mc["wpm"], 5, 60, float))
         if "tone_hz" in mc:
             updated["morse"]["tone_hz"] = int(_clamp(mc["tone_hz"], 200, 1200, float))
+        # Громкость намеренно без верхнего предела (только защита от переполнения).
+        for key in ("volume_yacht", "volume_stand"):
+            if key in mc:
+                updated["morse"][key] = _clamp(mc[key], 0, 100000, float)
 
     if "system_prompt_common" in payload:
         updated["system_prompt_common"] = str(payload["system_prompt_common"])[:2000]

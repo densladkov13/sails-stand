@@ -281,6 +281,8 @@
       const cfg = await resp.json();
       $("set-wpm").value = cfg.morse?.wpm ?? 20;
       $("set-tone").value = cfg.morse?.tone_hz ?? 600;
+      $("set-vol-yacht").value = cfg.morse?.volume_yacht ?? 100;
+      $("set-vol-stand").value = cfg.morse?.volume_stand ?? 20;
       $("set-model").value = cfg.openrouter?.model ?? "";
       $("set-temp").value = cfg.openrouter?.temperature ?? 0.9;
       $("set-max-tokens").value = cfg.openrouter?.max_tokens ?? 70;
@@ -323,7 +325,12 @@
       enabled: card.querySelector(".set-yacht-enabled").checked,
     }));
     const payload = {
-      morse: { wpm: Number($("set-wpm").value), tone_hz: Number($("set-tone").value) },
+      morse: {
+        wpm: Number($("set-wpm").value),
+        tone_hz: Number($("set-tone").value),
+        volume_yacht: Number($("set-vol-yacht").value),
+        volume_stand: Number($("set-vol-stand").value),
+      },
       openrouter: {
         model: $("set-model").value,
         temperature: Number($("set-temp").value),
