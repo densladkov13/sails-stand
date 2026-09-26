@@ -23,6 +23,15 @@ echo ============================================================
 echo   SAILS - starting the stand
 echo ============================================================
 
+rem Started by Windows autostart (shortcut passes "autostart"): wait 30 s so
+rem there is time to close this window if you need to work on the machine.
+rem Press any key to skip the wait.
+if /i "%~1"=="autostart" (
+    echo Autostart: the stand starts in 30 seconds.
+    echo Close this window to cancel, or press any key to start right now.
+    timeout /t 30
+)
+
 rem ---------- 1. Find or install Python ----------
 set "PYTHON_EXE="
 where python.exe >nul 2>nul

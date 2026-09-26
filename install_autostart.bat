@@ -9,6 +9,7 @@ echo.
 echo This adds a shortcut to the Windows Startup folder so the stand
 echo (start.bat) launches automatically whenever this computer turns
 echo on or you log in - useful if power blips during the event.
+echo It waits 30 seconds first, so you can close the window if needed.
 echo.
 set /p CONFIRM=Continue? (y/n):
 if /i not "%CONFIRM%"=="y" (
@@ -22,7 +23,7 @@ set "SHORTCUT=%STARTUP_DIR%\SAILS-Stand.lnk"
 set "TARGET=%~dp0start.bat"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-    "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%TARGET%'; $s.WorkingDirectory = '%~dp0'; $s.WindowStyle = 1; $s.Save()"
+    "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('%SHORTCUT%'); $s.TargetPath = '%TARGET%'; $s.Arguments = 'autostart'; $s.WorkingDirectory = '%~dp0'; $s.WindowStyle = 1; $s.Save()"
 
 if exist "%SHORTCUT%" (
     echo.
