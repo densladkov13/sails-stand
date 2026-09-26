@@ -26,14 +26,18 @@
     python yacht_client.py --host 192.168.1.10 --port 8000 --yacht yacht1
 """
 import argparse
+import array
 import asyncio
+import io
 import json
+import math
 import os
 import socket
 import subprocess
 import sys
 import threading
 import time
+import wave
 from pathlib import Path
 
 import requests
@@ -61,17 +65,6 @@ def set_led_effect(effect: int, color: int) -> None:
     effect_name = EFFECT_NAMES.get(effect, f"#{effect}")
     color_name = COLOR_NAMES.get(color, f"#{color}")
     print(f"[LED-EFFECT] {effect_name} / {color_name} (raw: {{{effect},{color}}})")
-
-
-def play_tone(duration_s: float, freq_hz: int) -> None:
-    """Блокирующее воспроизведение одного тона (вызывается в отдельном потоке)."""
-    set_led(True)
-    if winsound:
-        winsound.Beep(int(freq_hz), max(1, int(duration_s * 1000)))
-    else:
-        print(f"[BEEP] {freq_hz} Hz x {duration_s:.2f}s")
-        time.sleep(duration_s)
-    set_led(False)
 
 
 def run_update_and_exit() -> None:
@@ -111,23 +104,64 @@ def run_update_and_exit() -> None:
     os._exit(0)
 
 
-def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> None:
-    """Проигрывает строку азбуки Морзе (та же нотация, что и на сервере/дисплее)."""
-    if not morse:
-        return
+def build_morse_wav(morse: str, wpm: float, tone_hz: int) -> bytes:
+    """Собирает всё сообщение азбукой Морзе в один WAV в памяти (16 бит, моно).
+    Тайминг: точка = 1 единица, тире = 3, пауза между сигналами 1, между
+    буквами 3, между словами 7 — как на сервере и на стенде. Короткие
+    плавные нарастание/спад на каждом сигнале убирают щелчки."""
+    rate = 22050
     unit = 1.2 / max(wpm, 1)
+    ramp = min(0.004, unit / 3)
+    samples = array.array("h")
+
+    def silence(sec: float) -> None:
+        samples.extend([0] * int(rate * sec))
+
+    def tone(sec: float) -> None:
+        n = int(rate * sec)
+        r = max(1, int(rate * ramp))
+        for i in range(n):
+            env = min(1.0, i / r, (n - 1 - i) / r if n - 1 - i < r else 1.0)
+            samples.append(int(20000 * env * math.sin(2 * math.pi * tone_hz * i / rate)))
+
     words = [w.strip() for w in morse.split(" / ") if w.strip()]
     for w_idx, word in enumerate(words):
         letters = [l for l in word.split(" ") if l]
         for l_idx, letter in enumerate(letters):
             for symbol in letter:
-                duration = unit * 3 if symbol == "-" else unit
-                play_tone(duration, tone_hz)
-                time.sleep(unit)  # межсимвольный интервал
+                tone(unit * 3 if symbol == "-" else unit)
+                silence(unit)
             if l_idx < len(letters) - 1:
-                time.sleep(unit * 2)  # добираем межбуквенный интервал (итого 3)
+                silence(unit * 2)
         if w_idx < len(words) - 1:
-            time.sleep(unit * 4)  # добираем межсловный интервал (итого 7)
+            silence(unit * 4)
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(samples.tobytes())
+    return buf.getvalue()
+
+
+def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> None:
+    """Проигрывает сообщение азбукой Морзе через звук Windows по умолчанию
+    и ждёт, пока оно доиграет."""
+    if not morse:
+        return
+    wav = build_morse_wav(morse, wpm, tone_hz)
+    set_led(True)
+    try:
+        if winsound:
+            winsound.PlaySound(wav, winsound.SND_MEMORY)
+        else:
+            print(f"[BEEP] {len(wav)} байт, {tone_hz} Гц")
+            time.sleep(len(wav) / 44100)
+    except Exception as e:
+        print(f"[yacht_client] Не удалось проиграть звук: {e}")
+    finally:
+        set_led(False)
 
 
 class LedTable:
