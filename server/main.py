@@ -262,12 +262,18 @@ async def _delayed_self_restart(delay: float = 1.5) -> None:
     os._exit(0)
 
 
+def _find_git() -> str:
+    """git из PATH, а если его там нет — портативный MinGit, который ставит start.bat."""
+    mingit = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "MinGit", "cmd", "git.exe")
+    return mingit if os.path.exists(mingit) else "git"
+
+
 def _run_git_update(cwd: str) -> Dict[str, Any]:
     """git pull + переустановка зависимостей (если что-то реально подтянулось)."""
     try:
         env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
         pull = subprocess.run(
-            ["git", "pull"], cwd=cwd, capture_output=True, text=True, timeout=60, env=env
+            [_find_git(), "pull"], cwd=cwd, capture_output=True, text=True, timeout=60, env=env
         )
     except Exception as e:
         return {"ok": False, "output": f"Не удалось запустить git: {e}", "changed": False}
