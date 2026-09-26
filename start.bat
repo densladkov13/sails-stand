@@ -36,6 +36,10 @@ rem ---------- 1. Find or install Python ----------
 set "PYTHON_EXE="
 where python.exe >nul 2>nul
 if not errorlevel 1 set "PYTHON_EXE=python"
+rem The Microsoft Store "python.exe" stub (or a Python without venv) is found
+rem by "where" but cannot create environments - only trust a Python that can.
+if defined PYTHON_EXE python -c "import venv, ensurepip" >nul 2>nul
+if defined PYTHON_EXE if errorlevel 1 set "PYTHON_EXE="
 
 if not defined PYTHON_EXE (
     if exist "%PYUSERDIR%\python.exe" set "PYTHON_EXE=%PYUSERDIR%\python.exe"
