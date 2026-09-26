@@ -204,6 +204,9 @@
         showToast("История очищена");
         break;
       }
+      case "yacht_sound_result":
+        showToast(data.ok ? "Колонка яхт сыграла сигнал (" + data.output + ")" : "Колонка яхт: ошибка звука — " + data.output);
+        break;
       case "yacht_update_result":
         if (!data.ok) showToast("Обновление яхт не удалось: " + data.output);
         else if (data.changed) showToast("Компьютер яхт обновился (" + data.output + ") и перезапускается");
@@ -243,6 +246,15 @@
     } finally {
       standUpdateBtn.disabled = false;
     }
+  });
+
+  document.getElementById("yacht-sound-btn").addEventListener("click", () => {
+    if (!Object.values(stateById).some((st) => st.online)) {
+      showToast("Компьютер яхт сейчас не подключён");
+      return;
+    }
+    sendWS({ type: "test_yacht_sound" });
+    showToast("Тестовый сигнал SOS отправлен на колонку яхт...");
   });
 
   document.getElementById("yacht-update-btn").addEventListener("click", () => {

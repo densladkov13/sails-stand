@@ -169,23 +169,26 @@ def build_morse_wav(morse: str, wpm: float, tone_hz: int) -> bytes:
     return buf.getvalue()
 
 
-def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> None:
+def play_morse_blocking(morse: str, wpm: float, tone_hz: int) -> str:
     """Проигрывает сообщение азбукой Морзе через звук Windows по умолчанию
-    и ждёт, пока оно доиграет."""
+    и ждёт, пока оно доиграет. Возвращает текст ошибки или "" если всё хорошо."""
     if not morse:
-        return
-    wav = build_morse_wav(morse, wpm, tone_hz)
+        return ""
+    error = ""
     set_led(True)
     try:
+        wav = build_morse_wav(morse, wpm, tone_hz)
         if winsound:
             winsound.PlaySound(wav, winsound.SND_MEMORY)
         else:
             print(f"[BEEP] {len(wav)} байт, {tone_hz} Гц")
             time.sleep(len(wav) / 44100)
     except Exception as e:
+        error = str(e)
         print(f"[yacht_client] Не удалось проиграть звук: {e}")
     finally:
         set_led(False)
+    return error
 
 
 class LedTable:
@@ -212,9 +215,9 @@ play_lock = threading.Lock()
 update_started = False
 
 
-def play_locked(morse: str, wpm: float, tone_hz: int) -> None:
+def play_locked(morse: str, wpm: float, tone_hz: int) -> str:
     with play_lock:
-        play_morse_blocking(morse, wpm, tone_hz)
+        return play_morse_blocking(morse, wpm, tone_hz)
 
 
 async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: LedTable, wpm: float, tone_hz: int) -> None:
@@ -241,6 +244,14 @@ async def yacht_loop(host: str, port: int, yacht_id: str, number: int, table: Le
                                 await asyncio.sleep(1)
                                 os._exit(0)
                             update_started = False
+                        continue
+
+                    if msg_type == "test_sound":
+                        print("[yacht_client] Тест звука: SOS")
+                        err = await asyncio.to_thread(play_locked, "... --- ...", wpm, tone_hz)
+                        await ws.send(json.dumps({
+                            "type": "sound_result", "ok": not err, "output": err or f"{wpm} сл/мин, {tone_hz} Гц",
+                        }))
                         continue
 
                     if msg_type != "play_morse" or data.get("sender") != "yacht":

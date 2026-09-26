@@ -388,8 +388,7 @@
     while (playQueue.length) {
       const ev = playQueue.shift();
       const rendered = appendBubble(ev.yacht_id, ev, false);
-      // Ответ яхты звучит на колонке яхты, а не на стенде — тут только картинка.
-      if (rendered) await playMorse({ ...rendered, muted: ev.sender === "yacht" });
+      if (rendered) await playMorse(rendered);
     }
     isPlaying = false;
     updateInputLock();

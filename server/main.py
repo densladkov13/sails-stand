@@ -369,6 +369,10 @@ async def ws_display(ws: WebSocket) -> None:
             elif msg_type == "reset_history":
                 yacht_id = data.get("yacht_id", "")
                 asyncio.create_task(handle_reset(yacht_id))
+            elif msg_type == "test_yacht_sound":
+                online_id = next((y for y in cfg.YACHTS_BY_ID if manager.is_yacht_online(y)), None)
+                if online_id:
+                    asyncio.create_task(manager.send_to_yacht(online_id, {"type": "test_sound"}))
             elif msg_type == "trigger_yacht_update":
                 # один компьютер обслуживает все яхты — достаточно одной команды
                 online_id = next((y for y in cfg.YACHTS_BY_ID if manager.is_yacht_online(y)), None)
@@ -395,6 +399,12 @@ async def ws_yacht(ws: WebSocket, yacht_id: str) -> None:
                 data = json.loads(raw)
             except ValueError:
                 continue
+            if data.get("type") == "sound_result":
+                await manager.broadcast_display({
+                    "type": "yacht_sound_result",
+                    "ok": bool(data.get("ok")),
+                    "output": str(data.get("output", ""))[:300],
+                })
             if data.get("type") == "update_result":
                 await manager.broadcast_display({
                     "type": "yacht_update_result",
